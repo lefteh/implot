@@ -895,6 +895,7 @@ void AddTicksCustom(const double* values, const char* const labels[], int n, ImP
 
 // this may not be thread safe?
 constexpr double TimeUnitSpans[ImPlotTimeUnit_COUNT] = {
+    0.000000001,
     0.000001,
     0.001,
     1,
@@ -906,7 +907,7 @@ constexpr double TimeUnitSpans[ImPlotTimeUnit_COUNT] = {
 };
 
 inline ImPlotTimeUnit GetUnitForRange(double range) {
-    constexpr double cutoffs[ImPlotTimeUnit_COUNT] = {0.001, 1, 60, 3600, 86400, 2629800, 31557600, IMPLOT_MAX_TIME};
+    constexpr double cutoffs[ImPlotTimeUnit_COUNT] = {0.000001, 0.001, 1, 60, 3600, 86400, 2629800, 31557600, IMPLOT_MAX_TIME};
     for (int i = 0; i < ImPlotTimeUnit_COUNT; ++i) {
         if (range <= cutoffs[i])
             return (ImPlotTimeUnit)i;
@@ -925,7 +926,8 @@ inline int LowerBoundStep(int max_divs, const int* divs, const int* step, int si
 }
 
 inline int GetTimeStep(int max_divs, ImPlotTimeUnit unit) {
-    if (unit == ImPlotTimeUnit_Ms || unit == ImPlotTimeUnit_Us) {
+
+    if (unit == ImPlotTimeUnit_Ms || unit == ImPlotTimeUnit_Us || unit == ImPlotTimeUnit_Ns) {
         constexpr int step[] = {500,250,200,100,50,25,20,10,5,2,1};
         constexpr int divs[] = {2,4,5,10,20,40,50,100,200,500,1000};
         return LowerBoundStep(max_divs, divs, step, 11);
@@ -996,15 +998,15 @@ tm* GetLocTime(const ImPlotTime& t, tm* ptm) {
 #endif
 }
 
-ImPlotTime MakeTime(int year, int month, int day, int hour, int min, int sec, int us) {
+ImPlotTime MakeTime(int year, int month, int day, int hour, int min, int sec, long ns) {
     tm& Tm = GImPlot->Tm;
 
     int yr = year - 1900;
     if (yr < 0)
         yr = 0;
 
-    sec  = sec + us / 1000000;
-    us   = us % 1000000;
+    sec  = sec + ns / 1000000000;
+    ns   = ns % 1000000000;
 
     Tm.tm_sec  = sec;
     Tm.tm_min  = min;
@@ -1015,7 +1017,7 @@ ImPlotTime MakeTime(int year, int month, int day, int hour, int min, int sec, in
 
     ImPlotTime t = MkTime(&Tm);
 
-    t.Us = us;
+    t.Ns = ns;
     return t;
 }
 
@@ -1035,12 +1037,13 @@ ImPlotTime AddTime(const ImPlotTime& t, ImPlotTimeUnit unit, int count) {
     tm& Tm = GImPlot->Tm;
     ImPlotTime t_out = t;
     switch(unit) {
-        case ImPlotTimeUnit_Us:  t_out.Us += count;         break;
-        case ImPlotTimeUnit_Ms:  t_out.Us += count * 1000;  break;
-        case ImPlotTimeUnit_S:   t_out.S  += count;         break;
-        case ImPlotTimeUnit_Min: t_out.S  += count * 60;    break;
-        case ImPlotTimeUnit_Hr:  t_out.S  += count * 3600;  break;
-        case ImPlotTimeUnit_Day: t_out.S  += count * 86400; break;
+        case ImPlotTimeUnit_Ns:  t_out.Ns += count;           break;
+        case ImPlotTimeUnit_Us:  t_out.Ns += count * 1000;    break;
+        case ImPlotTimeUnit_Ms:  t_out.Ns += count * 1000000; break;
+        case ImPlotTimeUnit_S:   t_out.S  += count;           break;
+        case ImPlotTimeUnit_Min: t_out.S  += count * 60;      break;
+        case ImPlotTimeUnit_Hr:  t_out.S  += count * 3600;    break;
+        case ImPlotTimeUnit_Day: t_out.S  += count * 86400;   break;
         case ImPlotTimeUnit_Mo:  for (int i = 0; i < abs(count); ++i) {
                                      GetTime(t_out, &Tm);
                                      if (count > 0)
@@ -1068,8 +1071,9 @@ ImPlotTime FloorTime(const ImPlotTime& t, ImPlotTimeUnit unit) {
     GetTime(t, &gp.Tm);
     switch (unit) {
         case ImPlotTimeUnit_S:   return ImPlotTime(t.S, 0);
-        case ImPlotTimeUnit_Ms:  return ImPlotTime(t.S, (t.Us / 1000) * 1000);
-        case ImPlotTimeUnit_Us:  return t;
+        case ImPlotTimeUnit_Ms:  return ImPlotTime(t.S, (t.Ns / 1000000) * 1000000);
+        case ImPlotTimeUnit_Us:  return ImPlotTime(t.S, (t.Ns / 1000) * 1000);
+        case ImPlotTimeUnit_Ns:  return t;
         case ImPlotTimeUnit_Yr:  gp.Tm.tm_mon  = 0; // fall-through
         case ImPlotTimeUnit_Mo:  gp.Tm.tm_mday = 1; // fall-through
         case ImPlotTimeUnit_Day: gp.Tm.tm_hour = 0; // fall-through
@@ -1088,7 +1092,7 @@ ImPlotTime RoundTime(const ImPlotTime& t, ImPlotTimeUnit unit) {
     ImPlotTime t1 = FloorTime(t, unit);
     ImPlotTime t2 = AddTime(t1,unit,1);
     if (t1.S == t2.S)
-        return t.Us - t1.Us < t2.Us - t.Us ? t1 : t2;
+        return t.Ns - t1.Ns < t2.Ns - t.Ns ? t1 : t2;
     return t.S - t1.S < t2.S - t.S ? t1 : t2;
 }
 
@@ -1104,7 +1108,7 @@ ImPlotTime CombineDateTime(const ImPlotTime& date_part, const ImPlotTime& tod_pa
     Tm.tm_mon  = m;
     Tm.tm_mday = d;
     ImPlotTime t = MkTime(&Tm);
-    t.Us = tod_part.Us;
+    t.Ns = tod_part.Ns;
     return t;
 }
 
@@ -1116,13 +1120,15 @@ static const char* MONTH_ABRVS[]  = {"Jan","Feb","Mar","Apr","May","Jun","Jul","
 int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt, bool use_24_hr_clk) {
     tm& Tm = GImPlot->Tm;
     GetTime(t, &Tm);
-    const int us   = t.Us % 1000;
-    const int ms   = t.Us / 1000;
+    const int ns   =  t.Ns % 1000;
+    const int us   = (t.Ns / 1000) % 1000;
+    const int ms   =  t.Ns / 1000000;
     const int sec  = Tm.tm_sec;
     const int min  = Tm.tm_min;
     if (use_24_hr_clk) {
         const int hr   = Tm.tm_hour;
         switch(fmt) {
+            case ImPlotTimeFmt_Ns:        return ImFormatString(buffer, size, ".%03d %03d %03d", ms, us, ns);
             case ImPlotTimeFmt_Us:        return ImFormatString(buffer, size, ".%03d %03d", ms, us);
             case ImPlotTimeFmt_SUs:       return ImFormatString(buffer, size, ":%02d.%03d %03d", sec, ms, us);
             case ImPlotTimeFmt_SMs:       return ImFormatString(buffer, size, ":%02d.%03d", sec, ms);
@@ -1139,6 +1145,7 @@ int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt, b
         const char* ap = Tm.tm_hour < 12 ? "am" : "pm";
         const int hr   = (Tm.tm_hour == 0 || Tm.tm_hour == 12) ? 12 : Tm.tm_hour % 12;
         switch(fmt) {
+            case ImPlotTimeFmt_Ns:        return ImFormatString(buffer, size, ".%03d %03d %03d", ms, us, ns);
             case ImPlotTimeFmt_Us:        return ImFormatString(buffer, size, ".%03d %03d", ms, us);
             case ImPlotTimeFmt_SUs:       return ImFormatString(buffer, size, ":%02d.%03d %03d", sec, ms, us);
             case ImPlotTimeFmt_SMs:       return ImFormatString(buffer, size, ":%02d.%03d", sec, ms);
@@ -1195,7 +1202,7 @@ int FormatDateTime(const ImPlotTime& t, char* buffer, int size, ImPlotDateTimeSp
 }
 
 inline float GetDateTimeWidth(ImPlotDateTimeSpec fmt) {
-    static const ImPlotTime t_max_width = MakeTime(2888, 12, 22, 12, 58, 58, 888888); // best guess at time that maximizes pixel width
+    static const ImPlotTime t_max_width = MakeTime(2888, 12, 22, 12, 58, 58, 888888888); // best guess at time that maximizes pixel width
     char buffer[32];
     FormatDateTime(t_max_width, buffer, 32, fmt);
     return ImGui::CalcTextSize(buffer).x;
@@ -1209,6 +1216,7 @@ inline bool TimeLabelSame(const char* l1, const char* l2) {
 }
 
 static const ImPlotDateTimeSpec TimeFormatLevel0[ImPlotTimeUnit_COUNT] = {
+    ImPlotDateTimeSpec(ImPlotDateFmt_None,  ImPlotTimeFmt_Ns),
     ImPlotDateTimeSpec(ImPlotDateFmt_None,  ImPlotTimeFmt_Us),
     ImPlotDateTimeSpec(ImPlotDateFmt_None,  ImPlotTimeFmt_SMs),
     ImPlotDateTimeSpec(ImPlotDateFmt_None,  ImPlotTimeFmt_S),
@@ -1227,6 +1235,7 @@ static const ImPlotDateTimeSpec TimeFormatLevel1[ImPlotTimeUnit_COUNT] = {
     ImPlotDateTimeSpec(ImPlotDateFmt_DayMoYr, ImPlotTimeFmt_None),
     ImPlotDateTimeSpec(ImPlotDateFmt_DayMoYr, ImPlotTimeFmt_None),
     ImPlotDateTimeSpec(ImPlotDateFmt_Yr,      ImPlotTimeFmt_None),
+    ImPlotDateTimeSpec(ImPlotDateFmt_Yr,      ImPlotTimeFmt_None),
     ImPlotDateTimeSpec(ImPlotDateFmt_Yr,      ImPlotTimeFmt_None)
 };
 
@@ -1238,10 +1247,12 @@ static const ImPlotDateTimeSpec TimeFormatLevel1First[ImPlotTimeUnit_COUNT] = {
     ImPlotDateTimeSpec(ImPlotDateFmt_DayMoYr, ImPlotTimeFmt_None),
     ImPlotDateTimeSpec(ImPlotDateFmt_DayMoYr, ImPlotTimeFmt_None),
     ImPlotDateTimeSpec(ImPlotDateFmt_Yr,      ImPlotTimeFmt_None),
+    ImPlotDateTimeSpec(ImPlotDateFmt_Yr,      ImPlotTimeFmt_None),
     ImPlotDateTimeSpec(ImPlotDateFmt_Yr,      ImPlotTimeFmt_None)
 };
 
 static const ImPlotDateTimeSpec TimeFormatMouseCursor[ImPlotTimeUnit_COUNT] = {
+    ImPlotDateTimeSpec(ImPlotDateFmt_None,     ImPlotTimeFmt_Ns),
     ImPlotDateTimeSpec(ImPlotDateFmt_None,     ImPlotTimeFmt_Us),
     ImPlotDateTimeSpec(ImPlotDateFmt_None,     ImPlotTimeFmt_SUs),
     ImPlotDateTimeSpec(ImPlotDateFmt_None,     ImPlotTimeFmt_SMs),

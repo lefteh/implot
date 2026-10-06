@@ -238,6 +238,7 @@ typedef int ImPlotTimeFmt;        // -> enum ImPlotTimeFmt_
 typedef int ImPlotMarkerInternal; // -> enum ImPlotMarkerInternal_
 
 enum ImPlotTimeUnit_ {
+    ImPlotTimeUnit_Ns,  // nanosecond
     ImPlotTimeUnit_Us,  // microsecond
     ImPlotTimeUnit_Ms,  // millisecond
     ImPlotTimeUnit_S,   // second
@@ -260,6 +261,7 @@ enum ImPlotDateFmt_ {              // default        [ ISO 8601     ]
 
 enum ImPlotTimeFmt_ {              // default        [ 24 Hour Clock ]
     ImPlotTimeFmt_None = 0,
+    ImPlotTimeFmt_Ns,              // .428 552       [ .428 552 123 ]
     ImPlotTimeFmt_Us,              // .428 552       [ .428 552     ]
     ImPlotTimeFmt_SUs,             // :29.428 552    [ :29.428 552  ]
     ImPlotTimeFmt_SMs,             // :29.428        [ :29.428      ]
@@ -303,22 +305,22 @@ struct ImPlotDateTimeSpec {
 // Two part timestamp struct.
 struct ImPlotTime {
     time_t S;  // second part
-    int    Us; // microsecond part
-    ImPlotTime() { S = 0; Us = 0; }
-    ImPlotTime(time_t s, int us = 0) { S  = s + us / 1000000; Us = us % 1000000; }
-    void RollOver() { S  = S + Us / 1000000;  Us = Us % 1000000; }
-    double ToDouble() const { return (double)S + (double)Us / 1000000.0; }
-    static ImPlotTime FromDouble(double t) { return ImPlotTime((time_t)t, (int)(t * 1000000 - floor(t) * 1000000)); }
+    long   Ns; // nanosecond part
+    ImPlotTime() { S = 0; Ns = 0; }
+    ImPlotTime(time_t s, int ns = 0) { S  = s + ns / 1000000000; Ns = ns % 1000000000; }
+    void RollOver() { S  = S + Ns / 1000000000;  Ns = Ns % 1000000000; }
+    double ToDouble() const { return (double)S + (double)Ns / 1000000000.0; }
+    static ImPlotTime FromDouble(double t) { return ImPlotTime((time_t)t, (int)(t * 1000000000 - floor(t) * 1000000000)); }
 };
 
 static inline ImPlotTime operator+(const ImPlotTime& lhs, const ImPlotTime& rhs)
-{ return ImPlotTime(lhs.S + rhs.S, lhs.Us + rhs.Us); }
+{ return ImPlotTime(lhs.S + rhs.S, lhs.Ns + rhs.Ns); }
 static inline ImPlotTime operator-(const ImPlotTime& lhs, const ImPlotTime& rhs)
-{ return ImPlotTime(lhs.S - rhs.S, lhs.Us - rhs.Us); }
+{ return ImPlotTime(lhs.S - rhs.S, lhs.Ns - rhs.Ns); }
 static inline bool operator==(const ImPlotTime& lhs, const ImPlotTime& rhs)
-{ return lhs.S == rhs.S && lhs.Us == rhs.Us; }
+{ return lhs.S == rhs.S && lhs.Ns == rhs.Ns; }
 static inline bool operator<(const ImPlotTime& lhs, const ImPlotTime& rhs)
-{ return lhs.S == rhs.S ? lhs.Us < rhs.Us : lhs.S < rhs.S; }
+{ return lhs.S == rhs.S ? lhs.Ns < rhs.Ns : lhs.S < rhs.S; }
 static inline bool operator>(const ImPlotTime& lhs, const ImPlotTime& rhs)
 { return rhs < lhs; }
 static inline bool operator<=(const ImPlotTime& lhs, const ImPlotTime& rhs)
@@ -1609,8 +1611,8 @@ static inline tm* GetTime(const ImPlotTime& t, tm* ptm) {
 }
 
 // Make a timestamp from time components.
-// year[1970-3000], month[0-11], day[1-31], hour[0-23], min[0-59], sec[0-59], us[0,999999]
-IMPLOT_API ImPlotTime MakeTime(int year, int month = 0, int day = 1, int hour = 0, int min = 0, int sec = 0, int us = 0);
+// year[1970-3000], month[0-11], day[1-31], hour[0-23], min[0-59], sec[0-59], ns[0,999999999]
+IMPLOT_API ImPlotTime MakeTime(int year, int month = 0, int day = 1, int hour = 0, int min = 0, int sec = 0, long ns = 0);
 // Get year component from timestamp [1970-3000]
 IMPLOT_API int GetYear(const ImPlotTime& t);
 // Get month component from timestamp [0-11]
