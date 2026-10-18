@@ -260,10 +260,6 @@ ImPlotStyle::ImPlotStyle() {
     ImPlot::StyleColorsAuto(this);
 
     Colormap = ImPlotColormap_Deep;
-
-    UseLocalTime     = false;
-    Use24HourClock   = false;
-    UseISO8601       = false;
 }
 
 //-----------------------------------------------------------------------------
@@ -1117,7 +1113,7 @@ static const char* MONTH_NAMES[]  = {"January","February","March","April","May",
 static const char* WD_ABRVS[]     = {"Su","Mo","Tu","We","Th","Fr","Sa"};
 static const char* MONTH_ABRVS[]  = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
-int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt, bool use_24_hr_clk) {
+int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt) {
     tm& Tm = GImPlot->Tm;
     GetTime(t, &Tm);
     const int ns   =  t.Ns % 1000;
@@ -1125,7 +1121,7 @@ int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt, b
     const int ms   =  t.Ns / 1000000;
     const int sec  = Tm.tm_sec;
     const int min  = Tm.tm_min;
-    if (use_24_hr_clk) {
+    if (GImPlot->TimeFlags & ImPlotTimeFlags_Use24HourClock) {
         const int hr   = Tm.tm_hour;
         switch(fmt) {
             case ImPlotTimeFmt_Ns:        return ImFormatString(buffer, size, ".%03d %03d %03d", ms, us, ns);
@@ -1160,14 +1156,14 @@ int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt, b
     }
 }
 
-int FormatDate(const ImPlotTime& t, char* buffer, int size, ImPlotDateFmt fmt, bool use_iso_8601) {
+int FormatDate(const ImPlotTime& t, char* buffer, int size, ImPlotDateFmt fmt) {
     tm& Tm = GImPlot->Tm;
     GetTime(t, &Tm);
     const int day  = Tm.tm_mday;
     const int mon  = Tm.tm_mon + 1;
     const int year = Tm.tm_year + 1900;
     const int yr   = year % 100;
-    if (use_iso_8601) {
+    if (GImPlot->TimeFlags & ImPlotTimeFlags_UseISO8601) {
         switch (fmt) {
             case ImPlotDateFmt_DayMo:   return ImFormatString(buffer, size, "--%02d-%02d", mon, day);
             case ImPlotDateFmt_DayMoYr: return ImFormatString(buffer, size, "%d-%02d-%02d", year, mon, day);
@@ -1192,11 +1188,11 @@ int FormatDate(const ImPlotTime& t, char* buffer, int size, ImPlotDateFmt fmt, b
 int FormatDateTime(const ImPlotTime& t, char* buffer, int size, ImPlotDateTimeSpec fmt) {
     int written = 0;
     if (fmt.Date != ImPlotDateFmt_None)
-        written += FormatDate(t, buffer, size, fmt.Date, fmt.UseISO8601);
+        written += FormatDate(t, buffer, size, fmt.Date);
     if (fmt.Time != ImPlotTimeFmt_None) {
         if (fmt.Date != ImPlotDateFmt_None)
             buffer[written++] = ' ';
-        written += FormatTime(t, &buffer[written], size - written, fmt.Time, fmt.Use24HourClock);
+        written += FormatTime(t, &buffer[written], size - written, fmt.Time);
     }
     return written;
 }
@@ -1264,16 +1260,16 @@ static const ImPlotDateTimeSpec TimeFormatMouseCursor[ImPlotTimeUnit_COUNT] = {
 };
 
 inline ImPlotDateTimeSpec GetDateTimeFmt(const ImPlotDateTimeSpec* ctx, ImPlotTimeUnit idx) {
-    ImPlotStyle& style     = GetStyle();
-    ImPlotDateTimeSpec fmt  = ctx[idx];
-    fmt.UseISO8601         = style.UseISO8601;
-    fmt.Use24HourClock     = style.Use24HourClock;
-    return fmt;
+    return ctx[idx];
 }
 
 void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, bool vertical, ImPlotFormatter formatter, void* formatter_data) {
     IM_ASSERT_USER_ERROR(vertical == false, "Cannot locate Time ticks on vertical axis!");
     (void)vertical;
+    auto to_pos = [&](const ImPlotTime& t) { return (t - ticker.TimeOffset).ToDouble(); };
+    //TODO move later
+    GImPlot->TimeFlags = ticker.TimeFlags;
+
     // get units for level 0 and level 1 labels
     const ImPlotTimeUnit unit0 = GetUnitForRange(range.Size() / (pixels / 100)); // level = 0 (top)
     const ImPlotTimeUnit unit1 = ImClamp(unit0 + 1, 0, ImPlotTimeUnit_COUNT-1);  // level = 1 (bottom)
@@ -1282,8 +1278,8 @@ void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, 
     const ImPlotDateTimeSpec fmt1 = GetDateTimeFmt(TimeFormatLevel1, unit1);
     const ImPlotDateTimeSpec fmtf = GetDateTimeFmt(TimeFormatLevel1First, unit1);
     // min max times
-    const ImPlotTime t_min = ImPlotTime::FromDouble(range.Min);
-    const ImPlotTime t_max = ImPlotTime::FromDouble(range.Max);
+    const ImPlotTime t_min = ImPlotTime::Add(ticker.TimeOffset, ImPlotTime::FromDouble(range.Min));
+    const ImPlotTime t_max = ImPlotTime::Add(ticker.TimeOffset, ImPlotTime::FromDouble(range.Max));
     // maximum allowable density of labels
     const float max_density = 0.5f;
     // book keeping
@@ -1304,7 +1300,7 @@ void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, 
         // the minor step size (level 0)
         const int step = GetTimeStep(minor_per_major, unit0);
         // generate ticks
-        ImPlotTime t1 = FloorTime(ImPlotTime::FromDouble(range.Min), unit1);
+        ImPlotTime t1 = FloorTime(t_min, unit1);
         while (t1 < t_max) {
             // get next major
             const ImPlotTime t2 = AddTime(t1, unit1, 1);
@@ -1312,10 +1308,10 @@ void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, 
             if (t1 >= t_min && t1 <= t_max) {
                 // minor level 0 tick
                 ftd.Time = t1; ftd.Spec = fmt0;
-                ticker.AddTick(t1.ToDouble(), true, 0, true, Formatter_Time, &ftd);
+                ticker.AddTick(to_pos(t1), true, 0, true, Formatter_Time, &ftd);
                 // major level 1 tick
                 ftd.Time = t1; ftd.Spec = last_major_offset < 0 ? fmtf : fmt1;
-                ImPlotTick& tick_maj = ticker.AddTick(t1.ToDouble(), true, 1, true, Formatter_Time, &ftd);
+                ImPlotTick& tick_maj = ticker.AddTick(to_pos(t1), true, 1, true, Formatter_Time, &ftd);
                 const char* this_major = ticker.GetText(tick_maj);
                 if (last_major_offset >= 0 && TimeLabelSame(ticker.TextBuffer.Buf.Data + last_major_offset, this_major))
                     tick_maj.ShowLabel = false;
@@ -1328,10 +1324,10 @@ void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, 
                     float px_to_t2 = (float)((t2 - t12).ToDouble()/range.Size()) * pixels;
                     if (t12 >= t_min && t12 <= t_max) {
                         ftd.Time = t12; ftd.Spec = fmt0;
-                        ticker.AddTick(t12.ToDouble(), false, 0, px_to_t2 >= fmt0_width, Formatter_Time, &ftd);
+                        ticker.AddTick(to_pos(t12), false, 0, px_to_t2 >= fmt0_width, Formatter_Time, &ftd);
                         if (last_major_offset < 0 && px_to_t2 >= fmt0_width && px_to_t2 >= (fmt1_width + fmtf_width) / 2) {
                             ftd.Time = t12; ftd.Spec = fmtf;
-                            ImPlotTick& tick_maj = ticker.AddTick(t12.ToDouble(), true, 1, true, Formatter_Time, &ftd);
+                            ImPlotTick& tick_maj = ticker.AddTick(to_pos(t12), true, 1, true, Formatter_Time, &ftd);
                             last_major_offset = tick_maj.TextOffset;
                         }
                     }
@@ -1357,7 +1353,7 @@ void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, 
             ImPlotTime t = MakeTime(y);
             if (t >= t_min && t <= t_max) {
                 ftd.Time = t; ftd.Spec = fmty;
-                ticker.AddTick(t.ToDouble(), true, 0, true, Formatter_Time, &ftd);
+                ticker.AddTick(to_pos(t), true, 0, true, Formatter_Time, &ftd);
             }
         }
     }
@@ -2355,6 +2351,19 @@ void SetupAxisZoomConstraints(ImAxis idx, double z_min, double z_max) {
     IM_ASSERT_USER_ERROR(axis.Enabled, "Axis is not enabled! Did you forget to call SetupAxis()?");
     axis.ConstraintZoom.Min = z_min;
     axis.ConstraintZoom.Max = z_max;
+}
+void SetupAxisTime(ImAxis idx, ImPlotTime offset, ImPlotTimeFlags flags) {
+    ImPlotContext& gp = *GImPlot;
+    IM_ASSERT_USER_ERROR(gp.CurrentPlot != nullptr && !gp.CurrentPlot->SetupLocked,
+                        "Setup needs to be called after BeginPlot and before any setup locking functions (e.g. PlotX)!");
+    ImPlotPlot& plot = *gp.CurrentPlot;
+    ImPlotAxis& axis = plot.Axes[idx];
+    IM_ASSERT_USER_ERROR(axis.Scale == ImPlotScale_Time,
+                        "SetupAxisTime() requires SetupAxisScale(axis, ImPlotScale_Time) to be called first!");
+    //moved to Ticker
+    axis.Ticker.TimeOffset = offset;
+    axis.Ticker.TimeFlags  = flags;
+
 }
 
 void SetupAxes(const char* x_label, const char* y_label, ImPlotAxisFlags x_flags, ImPlotAxisFlags y_flags) {
@@ -5747,8 +5756,8 @@ bool ShowTimePicker(const char* id, ImPlotTime* t) {
 
     static const char* am_pm[] = {"am","pm"};
 
-    bool hour24 = gp.Style.Use24HourClock;
-
+    bool hour24 = GImPlot->TimeFlags & ImPlotTimeFlags_Use24HourClock;
+    
     int hr  = hour24 ? Tm.tm_hour : ((Tm.tm_hour == 0 || Tm.tm_hour == 12) ? 12 : Tm.tm_hour % 12);
     int min = Tm.tm_min;
     int sec = Tm.tm_sec;

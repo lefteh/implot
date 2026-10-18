@@ -290,27 +290,12 @@ typedef void (*ImPlotLocator)(ImPlotTicker& ticker, const ImPlotRange& range, fl
 // Combined date/time format spec
 struct ImPlotDateTimeSpec {
     ImPlotDateTimeSpec() {}
-    ImPlotDateTimeSpec(ImPlotDateFmt date_fmt, ImPlotTimeFmt time_fmt, bool use_24_hr_clk = false, bool use_iso_8601 = false) {
+    ImPlotDateTimeSpec(ImPlotDateFmt date_fmt, ImPlotTimeFmt time_fmt) {
         Date           = date_fmt;
         Time           = time_fmt;
-        UseISO8601     = use_iso_8601;
-        Use24HourClock = use_24_hr_clk;
     }
     ImPlotDateFmt Date;
     ImPlotTimeFmt Time;
-    bool UseISO8601;
-    bool Use24HourClock;
-};
-
-// Two part timestamp struct.
-struct ImPlotTime {
-    time_t S;  // second part
-    long   Ns; // nanosecond part
-    ImPlotTime() { S = 0; Ns = 0; }
-    ImPlotTime(time_t s, int ns = 0) { S  = s + ns / 1000000000; Ns = ns % 1000000000; }
-    void RollOver() { S  = S + Ns / 1000000000;  Ns = Ns % 1000000000; }
-    double ToDouble() const { return (double)S + (double)Ns / 1000000000.0; }
-    static ImPlotTime FromDouble(double t) { return ImPlotTime((time_t)t, (int)(t * 1000000000 - floor(t) * 1000000000)); }
 };
 
 static inline ImPlotTime operator+(const ImPlotTime& lhs, const ImPlotTime& rhs)
@@ -590,6 +575,9 @@ struct ImPlotTicker {
     ImVec2               MaxSize;
     ImVec2               LateSize;
     int                  Levels;
+
+    ImPlotTimeFlags      TimeFlags = ImPlotTimeFlags_None;
+    ImPlotTime           TimeOffset;
 
     ImPlotTicker() {
         Reset();
@@ -1253,6 +1241,8 @@ struct ImPlotContext {
 
     // Time
     tm Tm;
+    ImPlotTimeFlags TimeFlags;
+
 
     // Temp data for general use
     ImVector<double>   TempDouble1, TempDouble2;
@@ -1599,15 +1589,15 @@ IMPLOT_API tm* GetLocTime(const ImPlotTime& t, tm* ptm);
 // NB: The following functions only work if there is a current ImPlotContext because the
 // internal tm struct is owned by the context! They are aware of ImPlotStyle.UseLocalTime.
 
-// // Make a UNIX timestamp from a tm struct according to the current ImPlotStyle.UseLocalTime setting.
+// // Make a UNIX timestamp from a tm struct according to the current axis.TimeFlags, ImPlotTimeFlags_UseLocalTime.
 static inline ImPlotTime MkTime(struct tm *ptm) {
-    if (GetStyle().UseLocalTime) return MkLocTime(ptm);
-    else                         return MkGmtTime(ptm);
+    if (GImPlot->TimeFlags & ImPlotTimeFlags_UseLocalTime) return MkLocTime(ptm);
+    else                                                   return MkGmtTime(ptm);
 }
-// Get a tm struct from a UNIX timestamp according to the current ImPlotStyle.UseLocalTime setting.
+// Get a tm struct from a UNIX timestamp according to the current axis.TimeFlags, ImPlotTimeFlags_UseLocalTime.
 static inline tm* GetTime(const ImPlotTime& t, tm* ptm) {
-    if (GetStyle().UseLocalTime) return GetLocTime(t,ptm);
-    else                         return GetGmtTime(t,ptm);
+    if (GImPlot->TimeFlags & ImPlotTimeFlags_UseLocalTime) return GetLocTime(t,ptm);
+    else                                                   return GetGmtTime(t,ptm);
 }
 
 // Make a timestamp from time components.
@@ -1635,9 +1625,9 @@ static inline ImPlotTime Now() { return ImPlotTime::FromDouble((double)time(null
 static inline ImPlotTime Today() { return ImPlot::FloorTime(Now(), ImPlotTimeUnit_Day); }
 
 // Formats the time part of timestamp t into a buffer according to #fmt
-IMPLOT_API int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt, bool use_24_hr_clk);
+IMPLOT_API int FormatTime(const ImPlotTime& t, char* buffer, int size, ImPlotTimeFmt fmt);
 // Formats the date part of timestamp t into a buffer according to #fmt
-IMPLOT_API int FormatDate(const ImPlotTime& t, char* buffer, int size, ImPlotDateFmt fmt, bool use_iso_8601);
+IMPLOT_API int FormatDate(const ImPlotTime& t, char* buffer, int size, ImPlotDateFmt fmt);
 // Formats the time and/or date parts of a timestamp t into a buffer according to #fmt
 IMPLOT_API int FormatDateTime(const ImPlotTime& t, char* buffer, int size, ImPlotDateTimeSpec fmt);
 
@@ -1707,6 +1697,8 @@ struct Formatter_Time_Data {
 
 static inline int Formatter_Time(double, char* buff, int size, void* data) {
     Formatter_Time_Data* ftd = (Formatter_Time_Data*)data;
+    //GImPlot->TimeFlags
+    //ftd->Time.S += time;
     return FormatDateTime(ftd->Time, buff, size, ftd->Spec);
 }
 

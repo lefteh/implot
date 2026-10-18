@@ -90,6 +90,7 @@ typedef int ImPlotLegendFlags;        // -> enum ImPlotLegendFlags_
 typedef int ImPlotMouseTextFlags;     // -> enum ImPlotMouseTextFlags_
 typedef int ImPlotDragToolFlags;      // -> ImPlotDragToolFlags_
 typedef int ImPlotColormapScaleFlags; // -> ImPlotColormapScaleFlags_
+typedef int ImPlotTimeFlags;          // -> enum ImPlotTimeFlags_
 
 typedef int ImPlotItemFlags;          // -> ImPlotItemFlags_
 typedef int ImPlotLineFlags;          // -> ImPlotLineFlags_
@@ -193,6 +194,14 @@ enum ImPlotAxisFlags_ {
     ImPlotAxisFlags_Lock          = ImPlotAxisFlags_LockMin | ImPlotAxisFlags_LockMax,
     ImPlotAxisFlags_NoDecorations = ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_NoTickMarks | ImPlotAxisFlags_NoTickLabels,
     ImPlotAxisFlags_AuxDefault    = ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_Opposite
+};
+
+// Options for plots (see SetupTime).
+enum ImPlotTimeFlags_ {
+    ImPlotTimeFlags_None           = 0,      // default
+    ImPlotTimeFlags_UseLocalTime   = 1 << 0, // axis labels will be formatted for your timezone when ImPlotAxisFlag_Time is enabled
+    ImPlotTimeFlags_UseISO8601     = 1 << 1, // dates will be formatted according to ISO 8601 where applicable (e.g. YYYY-MM-DD, YYYY-MM, --MM-DD, etc.)
+    ImPlotTimeFlags_Use24HourClock = 1 << 2, // times will be formatted using a 24 hour clock
 };
 
 // Options for subplots (see BeginSubplot)
@@ -645,6 +654,20 @@ struct ImPlotRect {
     IMPLOT_API ImPlotPoint Max() const                                                      { return ImPlotPoint(X.Max, Y.Max);          }
 };
 
+// Two part timestamp struct.
+struct ImPlotTime {
+    time_t S;  // second part
+    long   Ns; // nanosecond part //hmmm do we make it long long? advantage linux uses long which is 64-bit windows thinks longs are 32-bit... ugh...
+    IMPLOT_API constexpr ImPlotTime()                       : S(0), Ns(0) { }
+    IMPLOT_API constexpr ImPlotTime(time_t s, long ns = 0)  { S = s + ns / 1000000000; Ns = ns % 1000000000;                              }
+    IMPLOT_API void RollOver()                              { S = S + Ns / 1000000000;  Ns = Ns % 1000000000;                             }
+    IMPLOT_API double ToDouble() const                      { return (double)S + (double)Ns / 1000000000.0;                               }
+    IMPLOT_API static ImPlotTime FromDouble(double t)       { return ImPlotTime((time_t)t, (long)((t - (double)(time_t)t) * 1000000000)); } //Preserves mantissa bits gets rid of floor and is faster
+    
+    IMPLOT_API constexpr static ImPlotTime Add(const ImPlotTime& a, const ImPlotTime& b) { return ImPlotTime(a.S + b.S, a.Ns + b.Ns); }
+    IMPLOT_API void AddTo(const ImPlotTime& a)                                           { S += a.S; Ns += a.Ns; RollOver();          }
+};
+
 // Plot style structure
 struct ImPlotStyle {
     // plot styling
@@ -673,10 +696,6 @@ struct ImPlotStyle {
     ImVec4  Colors[ImPlotCol_COUNT]; // Array of styling colors. Indexable with ImPlotCol_ enums.
     // colormap
     ImPlotColormap Colormap;         // The current colormap. Set this to either an ImPlotColormap_ enum or an index returned by AddColormap.
-    // settings/flags
-    bool    UseLocalTime;            // = false,  axis labels will be formatted for your timezone when ImPlotAxisFlag_Time is enabled
-    bool    UseISO8601;              // = false,  dates will be formatted according to ISO 8601 where applicable (e.g. YYYY-MM-DD, YYYY-MM, --MM-DD, etc.)
-    bool    Use24HourClock;          // = false,  times will be formatted using a 24 hour clock
     IMPLOT_API ImPlotStyle();
 };
 
@@ -885,6 +904,8 @@ IMPLOT_API void SetupAxisScale(ImAxis axis, ImPlotTransform forward, ImPlotTrans
 IMPLOT_API void SetupAxisLimitsConstraints(ImAxis axis, double v_min, double v_max);
 // Sets an axis' zoom constraints.
 IMPLOT_API void SetupAxisZoomConstraints(ImAxis axis, double z_min, double z_max);
+// Sets an axis time axis.
+IMPLOT_API void SetupAxisTime(ImAxis axis, ImPlotTime offset, ImPlotTimeFlags flags=0);
 
 // Sets the label and/or flags for primary X and Y axes (shorthand for two calls to SetupAxis).
 IMPLOT_API void SetupAxes(const char* x_label, const char* y_label, ImPlotAxisFlags x_flags=0, ImPlotAxisFlags y_flags=0);

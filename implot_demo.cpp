@@ -283,13 +283,19 @@ void Demo_Config() {
     ImPlot::ShowColormapSelector("ImPlot Colormap");
     ImPlot::ShowInputMapSelector("Input Map");
     ImGui::Separator();
-    ImGui::Checkbox("Use Local Time", &ImPlot::GetStyle().UseLocalTime);
-    ImGui::Checkbox("Use ISO 8601", &ImPlot::GetStyle().UseISO8601);
-    ImGui::Checkbox("Use 24 Hour Clock", &ImPlot::GetStyle().Use24HourClock);
+    //ImGui::Checkbox("Use Local Time", &ImPlot::GetStyle().UseLocalTime);
+    //ImGui::Checkbox("Use ISO 8601", &ImPlot::GetStyle().UseISO8601);
+    //ImGui::Checkbox("Use 24 Hour Clock", &ImPlot::GetStyle().Use24HourClock);
+    static ImPlotTimeFlags tflags = ImPlotTimeFlags_None;
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseLocalTime);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseISO8601);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_Use24HourClock);
+
     ImGui::Separator();
     if (ImPlot::BeginPlot("Preview")) {
         static double now = (double)time(nullptr);
         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+        ImPlot::SetupAxisTime(ImAxis_X1, ImPlotTime(), tflags);
         ImPlot::SetupAxisLimits(ImAxis_X1, now, now + 24*3600);
         for (int i = 0; i < 10; ++i) {
             double x[2] = {now, now + 24*3600};
@@ -1513,11 +1519,19 @@ void Demo_TimeScale() {
                         "UNIX timestamps in seconds and axis labels are formated as date/time.");
     ImGui::BulletText("By default, labels are in UTC time but can be set to use local time instead.");
 
-    ImGui::Checkbox("Local Time",&ImPlot::GetStyle().UseLocalTime);
+    static ImPlotTimeFlags tflags = ImPlotTimeFlags_None;
+    /*CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseLocalTime);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseISO8601);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_Use24HourClock);
+    */
+    //ImGui::Checkbox("Local Time",&ImPlot::GetStyle().UseLocalTime);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseLocalTime);
     ImGui::SameLine();
-    ImGui::Checkbox("ISO 8601",&ImPlot::GetStyle().UseISO8601);
+    //ImGui::Checkbox("ISO 8601",&ImPlot::GetStyle().UseISO8601);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseISO8601);
     ImGui::SameLine();
-    ImGui::Checkbox("24 Hour Clock",&ImPlot::GetStyle().Use24HourClock);
+    //ImGui::Checkbox("24 Hour Clock",&ImPlot::GetStyle().Use24HourClock);
+    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_Use24HourClock);
 
     static HugeTimeData* data = nullptr;
     if (data == nullptr) {
@@ -1530,6 +1544,7 @@ void Demo_TimeScale() {
 
     if (ImPlot::BeginPlot("##Time", ImVec2(-1,0))) {
         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+        ImPlot::SetupAxisTime(ImAxis_X1, ImPlotTime(), tflags);
         ImPlot::SetupAxesLimits(t_min,t_max,0,1);
         if (data != nullptr) {
             // downsample our data
@@ -2725,12 +2740,12 @@ void Demo_CustomPlottersAndTooltips()  {
     static ImVec4 bearCol = ImVec4(0.853f, 0.050f, 0.310f, 1.000f);
     ImGui::SameLine(); ImGui::ColorEdit4("##Bull", &bullCol.x, ImGuiColorEditFlags_NoInputs);
     ImGui::SameLine(); ImGui::ColorEdit4("##Bear", &bearCol.x, ImGuiColorEditFlags_NoInputs);
-    ImPlot::GetStyle().UseLocalTime = false;
 
     if (ImPlot::BeginPlot("Candlestick Chart",ImVec2(-1,0))) {
         ImPlot::SetupAxes(nullptr,nullptr,0,ImPlotAxisFlags_AutoFit|ImPlotAxisFlags_RangeFit);
         ImPlot::SetupAxesLimits(1546300800, 1571961600, 1250, 1600);
         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+        ImPlot::SetupAxisTime(ImAxis_X1, ImPlotTime(), ImPlotTimeFlags_None);
         ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, 1546300800, 1571961600);
         ImPlot::SetupAxisZoomConstraints(ImAxis_X1, 60*60*24*14, 1571961600-1546300800);
         ImPlot::SetupAxisFormat(ImAxis_Y1, "$%.0f");
@@ -3018,7 +3033,7 @@ void PlotCandlestick(const char* label_id, const double* xs, const double* opens
         if (idx != -1) {
             ImGui::BeginTooltip();
             char buff[32];
-            ImPlot::FormatDate(ImPlotTime::FromDouble(xs[idx]),buff,32,ImPlotDateFmt_DayMoYr,ImPlot::GetStyle().UseISO8601);
+            ImPlot::FormatDate(ImPlotTime::FromDouble(xs[idx]),buff,32,ImPlotDateFmt_DayMoYr);
             ImGui::Text("Day:   %s",  buff);
             ImGui::Text("Open:  $%.2f", opens[idx]);
             ImGui::Text("Close: $%.2f", closes[idx]);
