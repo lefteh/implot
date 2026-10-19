@@ -143,7 +143,7 @@ A: Yes. Three default styles are available, as well as an automatic style that a
 
 **Q: Does ImPlot support non-linear axis scaling? Time formatting?**
 
-A: Yes. Logscale and symmetric logscale are provided out of the box, and you can define custom axis scales as well. Time scale with microsecond precision is also available out of the box.
+A: Yes. Logscale and symmetric logscale are provided out of the box, and you can define custom axis scales as well. Time scale with nano second precision is also available out of the box.
 
 **Q: Does ImPlot support multiple y-axes? x-axes?**
 
