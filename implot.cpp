@@ -922,7 +922,6 @@ inline int LowerBoundStep(int max_divs, const int* divs, const int* step, int si
 }
 
 inline int GetTimeStep(int max_divs, ImPlotTimeUnit unit) {
-
     if (unit == ImPlotTimeUnit_Ms || unit == ImPlotTimeUnit_Us || unit == ImPlotTimeUnit_Ns) {
         constexpr int step[] = {500,250,200,100,50,25,20,10,5,2,1};
         constexpr int divs[] = {2,4,5,10,20,40,50,100,200,500,1000};

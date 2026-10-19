@@ -283,9 +283,6 @@ void Demo_Config() {
     ImPlot::ShowColormapSelector("ImPlot Colormap");
     ImPlot::ShowInputMapSelector("Input Map");
     ImGui::Separator();
-    //ImGui::Checkbox("Use Local Time", &ImPlot::GetStyle().UseLocalTime);
-    //ImGui::Checkbox("Use ISO 8601", &ImPlot::GetStyle().UseISO8601);
-    //ImGui::Checkbox("Use 24 Hour Clock", &ImPlot::GetStyle().Use24HourClock);
     static ImPlotTimeFlags tflags = ImPlotTimeFlags_None;
     CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseLocalTime);
     CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseISO8601);
@@ -1518,24 +1515,29 @@ void Demo_TimeScale() {
     ImGui::BulletText("When ImPlotAxisFlags_Time is enabled on the X-Axis, values are interpreted as\n"
                         "UNIX timestamps in seconds and axis labels are formated as date/time.");
     ImGui::BulletText("By default, labels are in UTC time but can be set to use local time instead.");
+    ImGui::BulletText("Using SetupAxisTime, these default formatting flags can be overridden, along with\n"
+                      "a time offset specified in seconds and nanoseconds relative to the Unix epoch.");
+
 
     static ImPlotTimeFlags tflags = ImPlotTimeFlags_None;
-    /*CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseLocalTime);
-    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseISO8601);
-    CHECKBOX_FLAG(tflags, ImPlotTimeFlags_Use24HourClock);
-    */
-    //ImGui::Checkbox("Local Time",&ImPlot::GetStyle().UseLocalTime);
+
     CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseLocalTime);
-    ImGui::SameLine();
-    //ImGui::Checkbox("ISO 8601",&ImPlot::GetStyle().UseISO8601);
     CHECKBOX_FLAG(tflags, ImPlotTimeFlags_UseISO8601);
-    ImGui::SameLine();
-    //ImGui::Checkbox("24 Hour Clock",&ImPlot::GetStyle().Use24HourClock);
     CHECKBOX_FLAG(tflags, ImPlotTimeFlags_Use24HourClock);
+
+    static ImPlotTime timeOffset = ImPlotTime();
+    long long min_sbound = 0;
+    long long max_sbound = 3153600000; // 100 years just to show (can be more)
+    ImGui::BulletText("A time offset should be used if nanosecond accuracy is desired beyond 104 days,\n"
+                      "since the mantissa bits begins to lose 1 to 1 integer accuracy.\n"
+                      "Or if the time source needs a relative offset.");
+    ImGui::SliderScalar("Seconds Offset", ImGuiDataType_U64, &timeOffset.S, &min_sbound, &max_sbound,"%llu");
+    long min_Nsbound = 0;
+    long max_Nsbound = 1e9 - 1; // 1e9 seconds
+    ImGui::SliderScalar("Nanoseconds Offset", ImGuiDataType_U32, &timeOffset.Ns, &min_Nsbound, &max_Nsbound, "%u");
 
     static HugeTimeData* data = nullptr;
     if (data == nullptr) {
-        ImGui::SameLine();
         if (ImGui::Button("Generate Huge Data (~500MB!)")) {
             static HugeTimeData sdata(t_min);
             data = &sdata;
@@ -1544,7 +1546,7 @@ void Demo_TimeScale() {
 
     if (ImPlot::BeginPlot("##Time", ImVec2(-1,0))) {
         ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
-        ImPlot::SetupAxisTime(ImAxis_X1, ImPlotTime(), tflags);
+        ImPlot::SetupAxisTime(ImAxis_X1, timeOffset, tflags);
         ImPlot::SetupAxesLimits(t_min,t_max,0,1);
         if (data != nullptr) {
             // downsample our data

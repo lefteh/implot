@@ -1697,8 +1697,6 @@ struct Formatter_Time_Data {
 
 static inline int Formatter_Time(double, char* buff, int size, void* data) {
     Formatter_Time_Data* ftd = (Formatter_Time_Data*)data;
-    //GImPlot->TimeFlags
-    //ftd->Time.S += time;
     return FormatDateTime(ftd->Time, buff, size, ftd->Spec);
 }
 

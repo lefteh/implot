@@ -657,7 +657,7 @@ struct ImPlotRect {
 // Two part timestamp struct.
 struct ImPlotTime {
     time_t S;  // second part
-    long   Ns; // nanosecond part //hmmm do we make it long long? advantage linux uses long which is 64-bit windows thinks longs are 32-bit... ugh...
+    long   Ns; // nanosecond part, should we make it long long? 
     IMPLOT_API constexpr ImPlotTime()                       : S(0), Ns(0) { }
     IMPLOT_API constexpr ImPlotTime(time_t s, long ns = 0)  { S = s + ns / 1000000000; Ns = ns % 1000000000;                              }
     IMPLOT_API void RollOver()                              { S = S + Ns / 1000000000;  Ns = Ns % 1000000000;                             }
