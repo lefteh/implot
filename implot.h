@@ -657,7 +657,7 @@ struct ImPlotRect {
 // Two part timestamp struct.
 struct ImPlotTime {
     time_t S;  // second part
-    long   Ns; // nanosecond part, should we make it long long? 
+    long   Ns; // nanosecond part
     IMPLOT_API constexpr ImPlotTime()                       : S(0), Ns(0) { }
     IMPLOT_API constexpr ImPlotTime(time_t s, long ns = 0)  { S = s + ns / 1000000000; Ns = ns % 1000000000;                              }
     IMPLOT_API void RollOver()                              { S = S + Ns / 1000000000;  Ns = Ns % 1000000000;                             }

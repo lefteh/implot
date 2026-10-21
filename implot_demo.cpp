@@ -1533,7 +1533,7 @@ void Demo_TimeScale() {
                       "Or if the time source needs a relative offset.");
     ImGui::SliderScalar("Seconds Offset", ImGuiDataType_U64, &timeOffset.S, &min_sbound, &max_sbound,"%llu");
     long min_Nsbound = 0;
-    long max_Nsbound = 1e9 - 1; // 1e9 seconds
+    long max_Nsbound = static_cast<long>(1e9) - 1; // 1e9 seconds
     ImGui::SliderScalar("Nanoseconds Offset", ImGuiDataType_U32, &timeOffset.Ns, &min_Nsbound, &max_Nsbound, "%u");
 
     static HugeTimeData* data = nullptr;
